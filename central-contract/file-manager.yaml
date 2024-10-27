@@ -1,0 +1,38 @@
+openapi: 3.0.0
+servers:
+  - url: http://localhost:8080
+info:
+  title: File Manager API
+  version: 0.0.1
+  description: API for managing files
+
+paths:
+  /users/{id}/entry:
+    get:
+      security:
+        -  bearerAuth: []
+      summary: Get the contents of a directory
+      operationId: getHomeDirectory
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The id of the user
+      responses:
+        '200':
+          description: A list of files and directories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
