@@ -1,4 +1,4 @@
-package database
+package postgresdb
 
 import "embed"
 
