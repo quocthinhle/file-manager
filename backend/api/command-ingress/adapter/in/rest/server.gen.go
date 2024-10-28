@@ -17,19 +17,52 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/go-chi/chi/v5"
-	"github.com/oapi-codegen/runtime"
 	strictnethttp "github.com/oapi-codegen/runtime/strictmiddleware/nethttp"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 const (
 	BearerAuthScopes = "bearerAuth.Scopes"
 )
 
+// Content defines model for Content.
+type Content struct {
+	// Id The unique identifier of the content
+	Id openapi_types.UUID `json:"id"`
+
+	// Name The name of the content
+	Name string `json:"name"`
+
+	// ParentID The parent directory of the content
+	ParentID openapi_types.UUID `json:"parentID"`
+
+	// Type The type of the content
+	Type string `json:"type"`
+}
+
+// CreateContentJSONBody defines parameters for CreateContent.
+type CreateContentJSONBody struct {
+	// Name The name of the new content
+	Name string `json:"name"`
+
+	// ParentID The parent directory of the new content
+	ParentID *openapi_types.UUID `json:"parentID,omitempty"`
+
+	// Type The type of the new content
+	Type *string `json:"type,omitempty"`
+}
+
+// CreateContentJSONRequestBody defines body for CreateContent for application/json ContentType.
+type CreateContentJSONRequestBody CreateContentJSONBody
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// Get the contents of a directory
-	// (GET /users/{id}/entry)
-	GetHomeDirectory(w http.ResponseWriter, r *http.Request, id string)
+	// (GET /contents)
+	GetHomeDirectory(w http.ResponseWriter, r *http.Request)
+	// Create a new directory
+	// (POST /contents)
+	CreateContent(w http.ResponseWriter, r *http.Request)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
@@ -37,8 +70,14 @@ type ServerInterface interface {
 type Unimplemented struct{}
 
 // Get the contents of a directory
-// (GET /users/{id}/entry)
-func (_ Unimplemented) GetHomeDirectory(w http.ResponseWriter, r *http.Request, id string) {
+// (GET /contents)
+func (_ Unimplemented) GetHomeDirectory(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Create a new directory
+// (POST /contents)
+func (_ Unimplemented) CreateContent(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -54,16 +93,25 @@ type MiddlewareFunc func(http.Handler) http.Handler
 // GetHomeDirectory operation middleware
 func (siw *ServerInterfaceWrapper) GetHomeDirectory(w http.ResponseWriter, r *http.Request) {
 
-	var err error
+	ctx := r.Context()
 
-	// ------------- Path parameter "id" -------------
-	var id string
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
 
-	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetHomeDirectory(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
 	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateContent operation middleware
+func (siw *ServerInterfaceWrapper) CreateContent(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
@@ -72,7 +120,7 @@ func (siw *ServerInterfaceWrapper) GetHomeDirectory(w http.ResponseWriter, r *ht
 	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetHomeDirectory(w, r, id)
+		siw.Handler.CreateContent(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -196,23 +244,42 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	}
 
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/users/{id}/entry", wrapper.GetHomeDirectory)
+		r.Get(options.BaseURL+"/contents", wrapper.GetHomeDirectory)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/contents", wrapper.CreateContent)
 	})
 
 	return r
 }
 
 type GetHomeDirectoryRequestObject struct {
-	Id string `json:"id"`
 }
 
 type GetHomeDirectoryResponseObject interface {
 	VisitGetHomeDirectoryResponse(w http.ResponseWriter) error
 }
 
-type GetHomeDirectory200JSONResponse []string
+type GetHomeDirectory200JSONResponse []Content
 
 func (response GetHomeDirectory200JSONResponse) VisitGetHomeDirectoryResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateContentRequestObject struct {
+	Body *CreateContentJSONRequestBody
+}
+
+type CreateContentResponseObject interface {
+	VisitCreateContentResponse(w http.ResponseWriter) error
+}
+
+type CreateContent200JSONResponse string
+
+func (response CreateContent200JSONResponse) VisitCreateContentResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
 
@@ -222,8 +289,11 @@ func (response GetHomeDirectory200JSONResponse) VisitGetHomeDirectoryResponse(w 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// Get the contents of a directory
-	// (GET /users/{id}/entry)
+	// (GET /contents)
 	GetHomeDirectory(ctx context.Context, request GetHomeDirectoryRequestObject) (GetHomeDirectoryResponseObject, error)
+	// Create a new directory
+	// (POST /contents)
+	CreateContent(ctx context.Context, request CreateContentRequestObject) (CreateContentResponseObject, error)
 }
 
 type StrictHandlerFunc = strictnethttp.StrictHTTPHandlerFunc
@@ -256,10 +326,8 @@ type strictHandler struct {
 }
 
 // GetHomeDirectory operation middleware
-func (sh *strictHandler) GetHomeDirectory(w http.ResponseWriter, r *http.Request, id string) {
+func (sh *strictHandler) GetHomeDirectory(w http.ResponseWriter, r *http.Request) {
 	var request GetHomeDirectoryRequestObject
-
-	request.Id = id
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetHomeDirectory(ctx, request.(GetHomeDirectoryRequestObject))
@@ -281,16 +349,50 @@ func (sh *strictHandler) GetHomeDirectory(w http.ResponseWriter, r *http.Request
 	}
 }
 
+// CreateContent operation middleware
+func (sh *strictHandler) CreateContent(w http.ResponseWriter, r *http.Request) {
+	var request CreateContentRequestObject
+
+	var body CreateContentJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateContent(ctx, request.(CreateContentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateContent")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateContentResponseObject); ok {
+		if err := validResponse.VisitCreateContentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"H4sIAAAAAAAC/2yST2sbQQzFv8qg8+LdtpcwN0NJ60Ih0EAPwYfpruxV2flTSRswZr570XiThtDTMH/0",
-	"9Ob3dIUxx5ITJhXwVxAcVya9/BhnjNiOfmFg5P2q87/dfeYYFDx8+/kIHUh7DX67hQ70Umw/qxaotXZA",
-	"6ZStfkIZmYpSTuBh/3Bwp8wuhhTOlM7uRAuK1ZMuJnBPC7rvdovs9g8H6OAZWW7Vw27YfYDaQS6YQiHw",
-	"8Gk37AbooASdm/t+FWTprzTVHpPyxQ7PqLbkghzMyWECD19Qv+aIn4lx1MyXpsIhoiIL+Kf33h9ndDS5",
-	"fHI6o7M2YN8E35pDByk0JjRBB4x/VmKcwCuvuBELZmIjJcqUzlDr0R5LyUlu+D8Ogy1jToqp2Q6lLDQ2",
-	"4/1vMS/XN3qkGOU/wq+ZBOZwuYXyLgy3kKh9qKXgQprctNEgFLCKl/loPN5OxtPRnMsaYzDGRrNx2XyL",
-	"yYZXua2/ID+/wF152QbG9/2Sx7DMWdTfDXcD1GP9GwAA//88uyFIqQIAAA==",
+	"H4sIAAAAAAAC/6xUTY/TMBD9K9bAMWoCXFa+LbtaKBLSSlTiUPXgdSaNV4ntHU9A0Sr/HdnudytgYS9t",
+	"3Ok8v5n3Xp5Bu947i5YDyGcIusVepccbZxktx0dPziOxwVQwdfysMWgyno2zIGHRohiseRpQmBotm8Yg",
+	"CdcIblHoDVIBjaNeMUgYBlNDATx6BAmBydg1TAVY1eNl9Fg5BzwD8IrQ8vz2MkiuitoQanY0/gPD/MMl",
+	"8Fj5I8OpAMKnwRDWIJeQ7khDH1DfNK12ze7hETWn5oB6IMPjtyhU1uMBFSFdD9zuT3fbMb58X0CRZY1I",
+	"ubqn1TJ7mCKwsY07n+v6fi4aR6JXVq2NXYvGdBhiv+EuAtyZDsXXWEUS1/dzKOAHUsjd1ayavYtLcx6t",
+	"8gYkfJhVsyoNy21iX25WlQ5rTH6LblORwbwGCZ+QP7seb7eiQVxh8M6GPP/7qopfeu9X5X1ndEIoH0Ok",
+	"snV28i9jnxrfEjYg4U25z0C5CUC5df9OcVBEasy7OtmR6EzgqHxajlC23jksRuZQNpDLY8GWq2lVQBj6",
+	"XtGYhz00UIiwam/YZHEXLmzphlAx3ux8F12GgT+6enzRdo6z/nd5tPjz9TN5DPpKufwt05NsptkvhDD/",
+	"7z8MeHrtmaMWmWk3Cp1UrQ8N8BI3ZVMIleY+xEggFJOaMAbqNi8DWZad06prXWB5VV1VMK2mXwEAAP//",
+	"5HeZqyYGAAA=",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file
