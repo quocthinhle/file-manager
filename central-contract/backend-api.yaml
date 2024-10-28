@@ -1,16 +1,15 @@
 openapi: 3.0.0
-servers:
-  - url: http://localhost:8080
 info:
   title: File Manager API
   version: 0.0.1
   description: API for managing files
-
+servers:
+  - url: http://localhost:8080
 paths:
   /contents:
     get:
       security:
-        -  bearerAuth: []
+        - bearerAuth: []
       summary: Get the contents of a directory
       operationId: getHomeDirectory
       responses:
@@ -21,11 +20,10 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: schema/content.yaml#/components/schemas/Content
-
+                  $ref: '#/components/schemas/Content'
     post:
       security:
-        -  bearerAuth: []
+        - bearerAuth: []
       summary: Create a new directory
       operationId: CreateContent
       requestBody:
@@ -53,12 +51,32 @@ paths:
             application/json:
               schema:
                 type: string
-
-
-
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
+  schemas:
+    Content:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The unique identifier of the content
+        name:
+          type: string
+          description: The name of the content
+        parentID:
+          type: string
+          format: uuid
+          description: The parent directory of the content
+        type:
+          type: string
+          description: The type of the content
+      required:
+        - id
+        - name
+        - parentID
+        - type

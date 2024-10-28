@@ -1,3 +1,3 @@
-//go:generate go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen --config=config.yaml ../../../../../../central-contract/file-manager.yaml
+//go:generate go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen --config=config.yaml ../../../../../../central-contract/backend-api.yaml
 
 package restadapter

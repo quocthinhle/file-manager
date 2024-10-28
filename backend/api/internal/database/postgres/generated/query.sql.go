@@ -11,6 +11,38 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const createNode = `-- name: CreateNode :one
+INSERT INTO node (id, type, name, parent_id, owner_id)
+VALUES ($1, $2, $3, $4, $5) RETURNING id, type, name, parent_id, owner_id
+`
+
+type CreateNodeParams struct {
+	ID       pgtype.UUID
+	Type     string
+	Name     string
+	ParentID pgtype.UUID
+	OwnerID  pgtype.UUID
+}
+
+func (q *Queries) CreateNode(ctx context.Context, arg CreateNodeParams) (Node, error) {
+	row := q.db.QueryRow(ctx, createNode,
+		arg.ID,
+		arg.Type,
+		arg.Name,
+		arg.ParentID,
+		arg.OwnerID,
+	)
+	var i Node
+	err := row.Scan(
+		&i.ID,
+		&i.Type,
+		&i.Name,
+		&i.ParentID,
+		&i.OwnerID,
+	)
+	return i, err
+}
+
 const getAllNodes = `-- name: GetAllNodes :many
 SELECT id, type, name, parent_id, owner_id FROM node
 `
