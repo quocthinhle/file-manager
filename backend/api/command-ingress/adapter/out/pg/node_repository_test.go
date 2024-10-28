@@ -46,12 +46,7 @@ var _ = Describe("NodeRepository", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Expect created node
-			Expect(contentCreated).NotTo(BeNil())
-			Expect(contentCreated.ID).To(Equal(content.ID))
-			Expect(contentCreated.Name).To(Equal(content.Name))
-			Expect(contentCreated.Type).To(Equal(content.Type))
-			Expect(contentCreated.ParentID).To(Equal(content.ParentID))
-			Expect(contentCreated.OwnerID).To(Equal(content.OwnerID))
+			assertNodeCreatedEqual(content, contentCreated)
 			assertNodeClosure(ctx, db, content.ID, content.ID, 0)
 
 			// Insert dir with parentID
@@ -67,17 +62,23 @@ var _ = Describe("NodeRepository", func() {
 
 			childContentCreated, err := nodeRepository.Create(ctx, childContent)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(childContentCreated).NotTo(BeNil())
-			Expect(childContentCreated.ID).To(Equal(childContent.ID))
-			Expect(childContentCreated.Name).To(Equal(childContent.Name))
-			Expect(childContentCreated.Type).To(Equal(childContent.Type))
-			Expect(childContentCreated.ParentID).To(Equal(childContent.ParentID))
-			Expect(childContentCreated.OwnerID).To(Equal(childContent.OwnerID))
+			assertNodeCreatedEqual(childContent, childContentCreated)
 			assertNodeClosure(ctx, db, childContent.ID, childContent.ID, 0)
 			assertNodeClosure(ctx, db, content.ID, childContent.ID, 1)
 		})
 	})
 })
+
+func assertNodeCreatedEqual(toBeCreate, created entity.Content) {
+	GinkgoHelper()
+	Expect(created).NotTo(BeNil())
+	Expect(toBeCreate).NotTo(BeNil())
+	Expect(toBeCreate.ID).To(Equal(created.ID))
+	Expect(toBeCreate.Name).To(Equal(created.Name))
+	Expect(toBeCreate.Type).To(Equal(created.Type))
+	Expect(toBeCreate.ParentID).To(Equal(created.ParentID))
+	Expect(toBeCreate.OwnerID).To(Equal(created.OwnerID))
+}
 
 func assertNodeClosure(
 	ctx context.Context,
