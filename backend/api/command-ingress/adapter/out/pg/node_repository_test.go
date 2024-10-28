@@ -65,6 +65,23 @@ var _ = Describe("NodeRepository", func() {
 			assertNodeCreatedEqual(childContent, childContentCreated)
 			assertNodeClosure(ctx, db, childContent.ID, childContent.ID, 0)
 			assertNodeClosure(ctx, db, content.ID, childContent.ID, 1)
+
+			childContent2 := entity.Content{
+				ID:          uuid.MustParse(gofakeit.UUID()),
+				Name:        "child-root-2",
+				Description: "child dir root 1-1",
+				Type:        "directory",
+				ParentID:    childContent.ID,
+				OwnerID:     uuid.MustParse(gofakeit.UUID()),
+				Children:    nil,
+			}
+
+			childContentCreated2, err := nodeRepository.Create(ctx, childContent2)
+			Expect(err).NotTo(HaveOccurred())
+			assertNodeCreatedEqual(childContent2, childContentCreated2)
+			assertNodeClosure(ctx, db, childContent2.ID, childContent2.ID, 0)
+			assertNodeClosure(ctx, db, childContent.ID, childContent2.ID, 1)
+			assertNodeClosure(ctx, db, content.ID, childContent2.ID, 2)
 		})
 	})
 })
