@@ -9,6 +9,7 @@ import (
 type FetchContentOutputPort interface {
 	// FetchRootDirectoryContent fetch the root directory content
 	FetchRootDirectoryContent(ctx context.Context, ownerID uuid.UUID) ([]entity.Content, error)
+	FetchContent(ctx context.Context, id uuid.UUID) (entity.Content, error)
 }
 
 type CreateContentOutputPort interface {

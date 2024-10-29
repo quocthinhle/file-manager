@@ -84,6 +84,86 @@ var _ = Describe("NodeRepository", func() {
 			assertNodeClosure(ctx, db, content.ID, childContent2.ID, 2)
 		})
 	})
+
+	Describe("fetch a directory", func() {
+		It("should fetch a directory", func() {
+			content := entity.Content{
+				ID:          uuid.MustParse(gofakeit.UUID()),
+				Name:        "root-1",
+				Description: "Root dir folder 1",
+				Type:        "directory",
+				ParentID:    uuid.Nil,
+				OwnerID:     uuid.MustParse(gofakeit.UUID()),
+				Children:    nil,
+			}
+
+			contentCreated, err := nodeRepository.Create(ctx, content)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Expect created node
+			assertNodeCreatedEqual(content, contentCreated)
+			assertNodeClosure(ctx, db, content.ID, content.ID, 0)
+
+			// Insert dir with parentID
+			childContent := entity.Content{
+				ID:          uuid.MustParse(gofakeit.UUID()),
+				Name:        "child-root-1",
+				Description: "child dir root 1",
+				Type:        "directory",
+				ParentID:    content.ID,
+				OwnerID:     uuid.MustParse(gofakeit.UUID()),
+				Children:    nil,
+			}
+
+			childContentCreated, err := nodeRepository.Create(ctx, childContent)
+			Expect(err).NotTo(HaveOccurred())
+			assertNodeCreatedEqual(childContent, childContentCreated)
+			assertNodeClosure(ctx, db, childContent.ID, childContent.ID, 0)
+			assertNodeClosure(ctx, db, content.ID, childContent.ID, 1)
+
+			childContent2 := entity.Content{
+				ID:          uuid.MustParse(gofakeit.UUID()),
+				Name:        "child-root-2",
+				Description: "child dir root 1-1",
+				Type:        "directory",
+				ParentID:    childContent.ID,
+				OwnerID:     uuid.MustParse(gofakeit.UUID()),
+				Children:    nil,
+			}
+
+			childContentCreated2, err := nodeRepository.Create(ctx, childContent2)
+			Expect(err).NotTo(HaveOccurred())
+			assertNodeCreatedEqual(childContent2, childContentCreated2)
+			assertNodeClosure(ctx, db, childContent2.ID, childContent2.ID, 0)
+			assertNodeClosure(ctx, db, childContent.ID, childContent2.ID, 1)
+			assertNodeClosure(ctx, db, content.ID, childContent2.ID, 2)
+
+			childContent3 := entity.Content{
+				ID:          uuid.MustParse(gofakeit.UUID()),
+				Name:        "child-root-3",
+				Description: "child dir root 1-1",
+				Type:        "directory",
+				ParentID:    content.ID,
+				OwnerID:     uuid.MustParse(gofakeit.UUID()),
+				Children:    nil,
+			}
+			childContentCreated3, err := nodeRepository.Create(ctx, childContent3)
+			Expect(err).NotTo(HaveOccurred())
+			assertNodeCreatedEqual(childContent3, childContentCreated3)
+
+			// Fetch content
+			fetchedContent, err := nodeRepository.FetchContent(ctx, content.ID)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fetchedContent).NotTo(BeNil())
+			Expect(fetchedContent.Children).To(HaveLen(2))
+			Expect(fetchedContent.Children[0]).NotTo(BeNil())
+			Expect(fetchedContent.Children[0].ID).To(Equal(childContent.ID))
+			Expect(fetchedContent.Children[0].Name).To(Equal(childContent.Name))
+			Expect(fetchedContent.Children[0].Type).To(Equal(childContent.Type))
+			Expect(fetchedContent.Children[0].ParentID).To(Equal(childContent.ParentID))
+			Expect(fetchedContent.Children[0].OwnerID).To(Equal(childContent.OwnerID))
+		})
+	})
 })
 
 func assertNodeCreatedEqual(toBeCreate, created entity.Content) {

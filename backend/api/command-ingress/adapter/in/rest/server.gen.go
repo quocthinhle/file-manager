@@ -17,6 +17,7 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/go-chi/chi/v5"
+	"github.com/oapi-codegen/runtime"
 	strictnethttp "github.com/oapi-codegen/runtime/strictmiddleware/nethttp"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -57,6 +58,9 @@ type CreateContentJSONRequestBody CreateContentJSONBody
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// Get the content by ID
+	// (GET /content/{id})
+	GetContentByID(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 	// Get the contents of a directory
 	// (GET /contents)
 	GetHomeDirectory(w http.ResponseWriter, r *http.Request)
@@ -68,6 +72,12 @@ type ServerInterface interface {
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
 
 type Unimplemented struct{}
+
+// Get the content by ID
+// (GET /content/{id})
+func (_ Unimplemented) GetContentByID(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
 
 // Get the contents of a directory
 // (GET /contents)
@@ -89,6 +99,37 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// GetContentByID operation middleware
+func (siw *ServerInterfaceWrapper) GetContentByID(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetContentByID(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // GetHomeDirectory operation middleware
 func (siw *ServerInterfaceWrapper) GetHomeDirectory(w http.ResponseWriter, r *http.Request) {
@@ -244,6 +285,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	}
 
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/content/{id}", wrapper.GetContentByID)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/contents", wrapper.GetHomeDirectory)
 	})
 	r.Group(func(r chi.Router) {
@@ -251,6 +295,23 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 
 	return r
+}
+
+type GetContentByIDRequestObject struct {
+	Id openapi_types.UUID `json:"id"`
+}
+
+type GetContentByIDResponseObject interface {
+	VisitGetContentByIDResponse(w http.ResponseWriter) error
+}
+
+type GetContentByID200JSONResponse Content
+
+func (response GetContentByID200JSONResponse) VisitGetContentByIDResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
 }
 
 type GetHomeDirectoryRequestObject struct {
@@ -288,6 +349,9 @@ func (response CreateContent200JSONResponse) VisitCreateContentResponse(w http.R
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// Get the content by ID
+	// (GET /content/{id})
+	GetContentByID(ctx context.Context, request GetContentByIDRequestObject) (GetContentByIDResponseObject, error)
 	// Get the contents of a directory
 	// (GET /contents)
 	GetHomeDirectory(ctx context.Context, request GetHomeDirectoryRequestObject) (GetHomeDirectoryResponseObject, error)
@@ -323,6 +387,32 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// GetContentByID operation middleware
+func (sh *strictHandler) GetContentByID(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request GetContentByIDRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetContentByID(ctx, request.(GetContentByIDRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetContentByID")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetContentByIDResponseObject); ok {
+		if err := validResponse.VisitGetContentByIDResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // GetHomeDirectory operation middleware
@@ -383,16 +473,17 @@ func (sh *strictHandler) CreateContent(w http.ResponseWriter, r *http.Request) {
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"H4sIAAAAAAAC/6xUTY/TMBD9K9bAMWoCXFa+LbtaKBLSSlTiUPXgdSaNV4ntHU9A0Sr/HdnudytgYS9t",
-	"3Ok8v5n3Xp5Bu947i5YDyGcIusVepccbZxktx0dPziOxwVQwdfysMWgyno2zIGHRohiseRpQmBotm8Yg",
-	"CdcIblHoDVIBjaNeMUgYBlNDATx6BAmBydg1TAVY1eNl9Fg5BzwD8IrQ8vz2MkiuitoQanY0/gPD/MMl",
-	"8Fj5I8OpAMKnwRDWIJeQ7khDH1DfNK12ze7hETWn5oB6IMPjtyhU1uMBFSFdD9zuT3fbMb58X0CRZY1I",
-	"ubqn1TJ7mCKwsY07n+v6fi4aR6JXVq2NXYvGdBhiv+EuAtyZDsXXWEUS1/dzKOAHUsjd1ayavYtLcx6t",
-	"8gYkfJhVsyoNy21iX25WlQ5rTH6LblORwbwGCZ+QP7seb7eiQVxh8M6GPP/7qopfeu9X5X1ndEIoH0Ok",
-	"snV28i9jnxrfEjYg4U25z0C5CUC5df9OcVBEasy7OtmR6EzgqHxajlC23jksRuZQNpDLY8GWq2lVQBj6",
-	"XtGYhz00UIiwam/YZHEXLmzphlAx3ux8F12GgT+6enzRdo6z/nd5tPjz9TN5DPpKufwt05NsptkvhDD/",
-	"7z8MeHrtmaMWmWk3Cp1UrQ8N8BI3ZVMIleY+xEggFJOaMAbqNi8DWZad06prXWB5VV1VMK2mXwEAAP//",
-	"5HeZqyYGAAA=",
+	"H4sIAAAAAAAC/6xUzW7bPBB8FWK/72hYansJdHNipHWBAgEaoIfAB0ZaWwwkklmuEgiG3r1YSracWMhP",
+	"k4sta83h7szs7CB3tXcWLQfIdhDyEmsdHy+cZbQsj56cR2KDsWAK+Sww5GQ8G2chg+sSVWPNfYPKFGjZ",
+	"bAySchvFJap8QJrBxlGtGTJoGlPADLj1CBkEJmO30M3A6hqn0aVyCngC4DWh5dVyGqSvqsIQ5uyo/YcO",
+	"+xdT4FJ5tcNuBoT3jSEsILuBeEcc+qj14dD6cNjd3mHO8XDAvCHD7W8RqtfjFjUhLRoux1+X+zF+/rmG",
+	"WS+rIPXVsa2S2UMnwMZu3Olci6uV2jhStbZ6a+xWbUyFQc4brgTg0lSofkkVSS2uVjCDB6TQn07n6fyL",
+	"kOY8Wu0NZPBtns7TOCyXsftkoCrZmaKTF1uMnhPHaeliVUAG35EHP563kSGvSdfISAGymyk1VstTLYwU",
+	"5eY96VkvwKgIU4MDXVq6eMUO3VoOB+9s6LX4mqbylY+7o72vTB4nSe6CtLc7wv+fcAMZ/JeMa5gMO5js",
+	"FzDKczpgfiiProhcHPvhZi0thqauNbU9j8ecqNtWrZYRYq9DeEmDH67G5X554IOzG8Y6vJmEA/eaSLdT",
+	"pCxUZQKL6tGkStvisOkSXR8hKgisHoMjRo0LEyxdEGrGi4PnxFsY+NwV7bvYeZq5b8tFi4+fn41PQT8p",
+	"H1/s9FlGxtknwrD/3wcM+PzayTWz+Fi1Ko+qFscGeI+belMoHec+xogg9LCPsYaqIZSzJKlcrqvSBc7O",
+	"0rMUunX3NwAA//+1ntg8rgcAAA==",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file
