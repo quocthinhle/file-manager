@@ -51,6 +51,27 @@ paths:
             application/json:
               schema:
                 type: string
+  /content/{id}:
+    get:
+      security:
+        - bearerAuth: []
+      summary: Get the content by ID
+      operationId: getContentByID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The ID of the content
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The content
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Content'
 components:
   securitySchemes:
     bearerAuth:

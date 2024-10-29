@@ -73,6 +73,48 @@ func (q *Queries) GetAllNodes(ctx context.Context) ([]Node, error) {
 	return items, nil
 }
 
+const getNode = `-- name: GetNode :one
+SELECT
+    n.id as id,
+    n.type as type,
+    n.name as name,
+    n.parent_id as parent_id,
+    n.owner_id as owner_id,
+    COALESCE(json_agg(json_build_object('id', c.id,
+                                       'name', c.name,
+                                       'type', c.type,
+                                       'parent_id', c.parent_id,
+                                       'owner_id', c.owner_id)), '[]') as children
+FROM node n
+         INNER JOIN node_closure nc on n.id = nc.ancestor_id AND nc.depth = 1
+INNER JOIN node c on nc.descendant_id = c.id
+WHERE n.id = $1
+GROUP BY n.id
+`
+
+type GetNodeRow struct {
+	ID       pgtype.UUID
+	Type     string
+	Name     string
+	ParentID pgtype.UUID
+	OwnerID  pgtype.UUID
+	Children interface{}
+}
+
+func (q *Queries) GetNode(ctx context.Context, id pgtype.UUID) (GetNodeRow, error) {
+	row := q.db.QueryRow(ctx, getNode, id)
+	var i GetNodeRow
+	err := row.Scan(
+		&i.ID,
+		&i.Type,
+		&i.Name,
+		&i.ParentID,
+		&i.OwnerID,
+		&i.Children,
+	)
+	return i, err
+}
+
 const getParentNodes = `-- name: GetParentNodes :many
 SELECT id, type, name, parent_id, owner_id FROM node WHERE parent_id IS NULL AND owner_id = $1
 `

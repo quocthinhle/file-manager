@@ -2,10 +2,10 @@ package pgoutadapter
 
 import (
 	"context"
+	"fmt"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/quocthinhle/file-manager-api/command-ingress/application/domain/entity"
-
 	pgdbgenerated "github.com/quocthinhle/file-manager-api/internal/database/postgres/generated"
 )
 
@@ -51,4 +51,66 @@ func (n *NodeOutputAdapter) Create(
 	}
 
 	return toContent(node), nil
+}
+
+type ChildContent struct {
+	ID       uuid.UUID `json:"id"`
+	Name     string    `json:"name"`
+	OwnerID  uuid.UUID `json:"owner_id"`
+	ParentID uuid.UUID `json:"parent_id"`
+	Type     string    `json:"type"`
+}
+
+func ConvertSlice[S any, D any](slice []S, transformFn func(S) D) []D {
+	if slice == nil {
+		return nil
+	}
+	result := make([]D, 0, len(slice))
+	for _, element := range slice {
+		transformedElement := transformFn(element)
+		result = append(result, transformedElement)
+	}
+	return result
+}
+
+func (n *NodeOutputAdapter) FetchContent(
+	ctx context.Context,
+	id uuid.UUID,
+) (content entity.Content, err error) {
+	node, err := n.query.GetNode(ctx, toPgUUID(id))
+	if err != nil {
+		return
+	}
+
+	children, ok := node.Children.([]interface{})
+
+	if !ok {
+		return entity.Content{}, fmt.Errorf("cannot convert children to []interface{}")
+	}
+
+	converted := make([]entity.Content, 0)
+
+	for _, c := range children {
+		x, ok := c.(map[string]interface{})
+		if !ok {
+			return entity.Content{}, fmt.Errorf("cannot convert children to []interface{}")
+		}
+
+		converted = append(converted, entity.Content{
+			ID:       uuid.MustParse(x["id"].(string)),
+			Name:     x["name"].(string),
+			Type:     x["type"].(string),
+			OwnerID:  uuid.MustParse(x["owner_id"].(string)),
+			ParentID: uuid.MustParse(x["parent_id"].(string)),
+		})
+	}
+
+	return entity.Content{
+		ID:       node.ID.Bytes,
+		Name:     node.Name,
+		Type:     node.Type,
+		OwnerID:  node.OwnerID.Bytes,
+		ParentID: node.ParentID.Bytes,
+		Children: converted,
+	}, nil
 }

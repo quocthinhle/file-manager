@@ -26,3 +26,12 @@ func (u *FetchContentUseCase) FetchRootContents(ctx context.Context) ([]entity.C
 
 	return contents, nil
 }
+
+func (u *FetchContentUseCase) FetchContent(ctx context.Context, id uuid.UUID) (entity.Content, error) {
+	content, err := u.fetchContentOutputPort.FetchContent(ctx, id)
+	if err != nil {
+		return entity.Content{}, err
+	}
+
+	return content, nil
+}
