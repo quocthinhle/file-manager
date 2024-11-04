@@ -9,20 +9,20 @@ import (
 )
 
 type Node struct {
-	ID       pgtype.UUID
-	Type     string
-	Name     string
-	ParentID pgtype.UUID
-	OwnerID  pgtype.UUID
+	ID       pgtype.UUID `db:"id" json:"id"`
+	Type     string      `db:"type" json:"type"`
+	Name     string      `db:"name" json:"name"`
+	ParentID pgtype.UUID `db:"parent_id" json:"parentId"`
+	OwnerID  pgtype.UUID `db:"owner_id" json:"ownerId"`
 }
 
 type NodeClosure struct {
-	AncestorID   pgtype.UUID
-	DescendantID pgtype.UUID
-	Depth        int32
+	AncestorID   pgtype.UUID `db:"ancestor_id" json:"ancestorId"`
+	DescendantID pgtype.UUID `db:"descendant_id" json:"descendantId"`
+	Depth        int32       `db:"depth" json:"depth"`
 }
 
 type NodeContent struct {
-	NodeID  pgtype.UUID
-	Content string
+	NodeID  pgtype.UUID `db:"node_id" json:"nodeId"`
+	Content string      `db:"content" json:"content"`
 }

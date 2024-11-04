@@ -33,6 +33,24 @@ func (r *FileManagerRestAdapter) GetHomeDirectory(ctx context.Context, request G
 	return GetHomeDirectory200JSONResponse(contentResponses), nil
 }
 
+func (r *FileManagerRestAdapter) GetContentByID(
+	ctx context.Context,
+	request GetContentByIDRequestObject,
+) (GetContentByIDResponseObject, error) {
+	content, err := r.fetchContentUseCase.FetchContent(ctx, request.Id)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return GetContentByID200JSONResponse{
+		Id:       content.ID,
+		Name:     content.Name,
+		ParentID: content.ParentID,
+		Type:     content.Type,
+	}, nil
+}
+
 func toContentResponse(contents []entity.Content) []Content {
 	var contentResponses []Content
 	for _, content := range contents {

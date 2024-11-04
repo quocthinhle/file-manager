@@ -15,11 +15,11 @@ SELECT
     n.name as name,
     n.parent_id as parent_id,
     n.owner_id as owner_id,
-    COALESCE(json_agg(json_build_object('id', c.id,
+    COALESCE(jsonb_agg(json_build_object('id', c.id,
                                        'name', c.name,
                                        'type', c.type,
                                        'parent_id', c.parent_id,
-                                       'owner_id', c.owner_id)), '[]') as children
+                                       'owner_id', c.owner_id)), '[]'::jsonb)::jsonb as "children"
 FROM node n
          INNER JOIN node_closure nc on n.id = nc.ancestor_id AND nc.depth = 1
 INNER JOIN node c on nc.descendant_id = c.id

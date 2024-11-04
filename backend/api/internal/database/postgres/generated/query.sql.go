@@ -17,11 +17,11 @@ VALUES ($1, $2, $3, $4, $5) RETURNING id, type, name, parent_id, owner_id
 `
 
 type CreateNodeParams struct {
-	ID       pgtype.UUID
-	Type     string
-	Name     string
-	ParentID pgtype.UUID
-	OwnerID  pgtype.UUID
+	ID       pgtype.UUID `db:"id" json:"id"`
+	Type     string      `db:"type" json:"type"`
+	Name     string      `db:"name" json:"name"`
+	ParentID pgtype.UUID `db:"parent_id" json:"parentId"`
+	OwnerID  pgtype.UUID `db:"owner_id" json:"ownerId"`
 }
 
 func (q *Queries) CreateNode(ctx context.Context, arg CreateNodeParams) (Node, error) {
@@ -80,11 +80,11 @@ SELECT
     n.name as name,
     n.parent_id as parent_id,
     n.owner_id as owner_id,
-    COALESCE(json_agg(json_build_object('id', c.id,
+    COALESCE(jsonb_agg(json_build_object('id', c.id,
                                        'name', c.name,
                                        'type', c.type,
                                        'parent_id', c.parent_id,
-                                       'owner_id', c.owner_id)), '[]') as children
+                                       'owner_id', c.owner_id)), '[]'::jsonb)::jsonb as "children"
 FROM node n
          INNER JOIN node_closure nc on n.id = nc.ancestor_id AND nc.depth = 1
 INNER JOIN node c on nc.descendant_id = c.id
@@ -93,12 +93,12 @@ GROUP BY n.id
 `
 
 type GetNodeRow struct {
-	ID       pgtype.UUID
-	Type     string
-	Name     string
-	ParentID pgtype.UUID
-	OwnerID  pgtype.UUID
-	Children interface{}
+	ID       pgtype.UUID `db:"id" json:"id"`
+	Type     string      `db:"type" json:"type"`
+	Name     string      `db:"name" json:"name"`
+	ParentID pgtype.UUID `db:"parent_id" json:"parentId"`
+	OwnerID  pgtype.UUID `db:"owner_id" json:"ownerId"`
+	Children []byte      `db:"children" json:"children"`
 }
 
 func (q *Queries) GetNode(ctx context.Context, id pgtype.UUID) (GetNodeRow, error) {

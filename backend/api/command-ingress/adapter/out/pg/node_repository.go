@@ -2,7 +2,9 @@ package pgoutadapter
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/quocthinhle/file-manager-api/command-ingress/application/domain/entity"
@@ -61,16 +63,14 @@ type ChildContent struct {
 	Type     string    `json:"type"`
 }
 
-func ConvertSlice[S any, D any](slice []S, transformFn func(S) D) []D {
-	if slice == nil {
-		return nil
+func (s ChildContent) toContent() entity.Content {
+	return entity.Content{
+		ID:       s.ID,
+		Name:     s.Name,
+		OwnerID:  s.OwnerID,
+		ParentID: s.ParentID,
+		Type:     s.Type,
 	}
-	result := make([]D, 0, len(slice))
-	for _, element := range slice {
-		transformedElement := transformFn(element)
-		result = append(result, transformedElement)
-	}
-	return result
 }
 
 func (n *NodeOutputAdapter) FetchContent(
@@ -82,27 +82,17 @@ func (n *NodeOutputAdapter) FetchContent(
 		return
 	}
 
-	children, ok := node.Children.([]interface{})
+	var childrenContent []ChildContent
 
-	if !ok {
+	err = json.Unmarshal([]byte(node.Children), &childrenContent)
+
+	if err != nil {
 		return entity.Content{}, fmt.Errorf("cannot convert children to []interface{}")
 	}
 
-	converted := make([]entity.Content, 0)
-
-	for _, c := range children {
-		x, ok := c.(map[string]interface{})
-		if !ok {
-			return entity.Content{}, fmt.Errorf("cannot convert children to []interface{}")
-		}
-
-		converted = append(converted, entity.Content{
-			ID:       uuid.MustParse(x["id"].(string)),
-			Name:     x["name"].(string),
-			Type:     x["type"].(string),
-			OwnerID:  uuid.MustParse(x["owner_id"].(string)),
-			ParentID: uuid.MustParse(x["parent_id"].(string)),
-		})
+	children := make([]entity.Content, len(childrenContent))
+	for i, child := range childrenContent {
+		children[i] = child.toContent()
 	}
 
 	return entity.Content{
@@ -111,6 +101,6 @@ func (n *NodeOutputAdapter) FetchContent(
 		Type:     node.Type,
 		OwnerID:  node.OwnerID.Bytes,
 		ParentID: node.ParentID.Bytes,
-		Children: converted,
+		Children: children,
 	}, nil
 }

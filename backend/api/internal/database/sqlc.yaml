@@ -9,3 +9,15 @@ sql:
       package: "pgdbgenerated"
       out: "postgres/generated"
       sql_package: "pgx/v5"
+      emit_json_tags: true
+      emit_db_tags: true
+      json_tags_case_style: camel
+overrides:
+  go:
+    overrides:
+      # - column: "vod.subtitles"
+      #   go_type:
+      #     import: "source.vtvlive.vn/cellutions/seenow/content-service/internal/database/content/valueobject"
+      #     package: "valueobject"
+      #     type: "Subtitle"
+      #     slice: true
